@@ -1,4 +1,5 @@
 // JSON sources: plain JSON APIs, JSON embedded in HTML (script tags, window variables).
+import { githubRepoStars, supportsGithubStars, type GithubRepoStars } from "./github-stars.ts";
 import { credential } from "../config.ts";
 import { languageHeaders, requireOk } from "../lib/http-fetch.ts";
 import { JINA_PREFIX, jinaRead } from "../providers/jina.ts";
@@ -138,7 +139,7 @@ function embeddedJson(html: string, source: SourceRow): unknown {
   throw new FetchError(`embedded key ${key} not found`);
 }
 
-export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
+export async function fetchJsonList(source: SourceRow, stars?: GithubRepoStars[]): Promise<Candidate[]> {
   const c = source.config;
   const url = String(c.url ?? "");
   const headers: Record<string, string> = { accept: "application/json, text/html;q=0.9", ...languageHeaders(c.acceptLanguage), ...(c.headers ?? {}) };
@@ -171,12 +172,17 @@ export async function fetchJsonList(source: SourceRow): Promise<Candidate[]> {
   if (!Array.isArray(items)) throw new FetchError("items path did not resolve to an array");
 
   const out: Candidate[] = [];
+  const observe = c.captureGithubStars === true && supportsGithubStars(url) ? stars : undefined;
   for (const item of items) {
     if (c.requireBoolean && getPath(item, c.requireBoolean.path) !== c.requireBoolean.equals) continue;
     if (c.minNumeric && !(Number(getPath(item, c.minNumeric.path)) >= Number(c.minNumeric.min))) continue;
     const title = firstString(item, c.titlePaths);
     const url = (c.urlTemplate && renderTemplate(c.urlTemplate, item)) || (c.urlTemplateFallback && renderTemplate(c.urlTemplateFallback, item));
     if (!title || !url) continue;
+    if (observe && observe.length < 100) {
+      const obs = githubRepoStars(item, url);
+      if (obs) observe.push(obs);
+    }
     const externalId = c.externalIdPath ? getPath(item, c.externalIdPath) : null;
     const summary = firstString(item, c.summaryPaths);
     const summaryIsBody = !c.detail?.bodyUrlSuffix && c.summaryIsBody === true && !!summary;

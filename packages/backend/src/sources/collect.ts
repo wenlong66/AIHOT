@@ -10,6 +10,8 @@ import { enqueue, QUEUES, shutdownSignal } from "../jobs/queue.ts";
 import { queueProcessing } from "../jobs/content.ts";
 import { BudgetExceededError, completeReceipt } from "../providers/receipts.ts";
 import { fetchRss } from "./rss.ts";
+import { observeGithubStars, type GithubRepoStars } from "./github-stars.ts";
+import { sitemapAdditions } from "./sitemap.ts";
 import { fetchDetail, fetchWebList, isCallToActionTitle, needsTitle, type DetailNeed } from "./web-list.ts";
 import { unsupportedConfig } from "./config-keys.ts";
 import { admitListing, filterPublicationWindow } from "./filters.ts";
@@ -342,8 +344,22 @@ export async function collectSource(sourceId: string, opts: { force?: boolean; x
       else delete nextCursor.rss;
       if (rss.notModified) detail = { notModified: true, httpStatus: 304 };
     }
-    else if (source.kind === "web_list") candidates = await fetchWebList(source);
-    else if (source.kind === "json_list") candidates = await fetchJsonList(source);
+    else if (source.kind === "web_list") {
+      candidates = await fetchWebList(source);
+      if (source.config.parseMode === "sitemap") {
+        const changes = sitemapAdditions(source, candidates);
+        candidates = changes.entries;
+        nextCursor.sitemapBaseline = changes.baseline;
+      } else delete nextCursor.sitemapBaseline;
+    }
+    else if (source.kind === "json_list") {
+      const stars: GithubRepoStars[] = [];
+      const at = new Date();
+      candidates = await fetchJsonList(source, stars);
+      if (source.config.captureGithubStars === true) {
+        nextCursor.githubStars = observeGithubStars(source.cursor?.githubStars, source.config.url, stars, at);
+      } else delete nextCursor.githubStars;
+    }
     else {
       const x = await fetchXSearch(source, opts.xSince);
       candidates = x.candidates;

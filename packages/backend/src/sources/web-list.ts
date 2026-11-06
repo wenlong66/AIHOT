@@ -4,6 +4,7 @@ import { marked } from "marked";
 import { guardedFetch, languageHeaders, requireOk } from "../lib/http-fetch.ts";
 import { contentDocument, UnavailablePageError } from "../lib/page-content.ts";
 import { fetchListing } from "./listing-fetch.ts";
+import { fetchSitemap } from "./sitemap.ts";
 import { identityKeyForUrl, normalizeUrl } from "../lib/url.ts";
 import { collapseWhitespace, stripTags } from "../lib/text.ts";
 import { isSignInRedirect, isSignInUrl, pagePublicationDate, pageRules, readableDocument, type ExtractedBody } from "../content/extract.ts";
@@ -355,6 +356,7 @@ async function fromMimoHome(html: string, base: string, source: SourceRow): Prom
 }
 
 export async function fetchWebList(source: SourceRow): Promise<Candidate[]> {
+  if (source.config.parseMode === "sitemap") return fetchSitemap(source);
   const { text, viaJina, base } = await fetchListingText(source);
   const mode = source.config.adapter === "mimo_home" ? "mimo_home" : source.config.parseMode ?? (viaJina ? "markdown" : "html");
   let out: Candidate[];
