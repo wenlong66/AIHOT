@@ -167,7 +167,8 @@ async function chatOnce<S extends z.ZodType>(opts: ChatJsonOptions<S>, circuit =
   if (!config.modelCallsEnabled) throw new ModelUnavailableError("Model calls are disabled (MODEL_CALLS_ENABLED=false)");
   const baseUrl = credential("models", spec.baseUrlEnv);
   const apiKey = credential("models", spec.apiKeyEnv);
-  if (!baseUrl || !apiKey || !spec.model) throw new ModelUnavailableError(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
+  const keyless = spec.key === "default" && process.env.LLM_ALLOW_KEYLESS === "true";
+  if (!baseUrl || (!apiKey && !keyless) || !spec.model) throw new ModelUnavailableError(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
 
   const { request, temperature, maxTokens, userText } = requestFor(opts, spec);
   const timeoutMs = opts.timeoutMs ?? (circuit ? FAILOVER_TIMEOUT_MS : TIMEOUT_MS);
@@ -195,7 +196,7 @@ async function chatOnce<S extends z.ZodType>(opts: ChatJsonOptions<S>, circuit =
       try {
         res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          headers: { "content-type": "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),
         });

@@ -1,6 +1,7 @@
 // The config keys each kind of source implements. Anything else is refused: a key a collector does not
 // know would otherwise fall back silently to the generic parse (menus and sentence fragments as
 // articles, dates never found).
+import { supportsGithubStars } from "./github-stars.ts";
 import type { SourceRow } from "./types.ts";
 
 // Rules applied in collect.ts to every kind read through collectSource.
@@ -16,7 +17,7 @@ const KEYS: Record<SourceRow["kind"], string[]> = {
   json_list: [
     ...COLLECTED, "url", "mode", "method", "headers", "bodyJson", "jsonKey", "windowVar", "itemsPath", "itemsObjectValues",
     "titlePaths", "summaryPaths", "summaryIsBody", "authorPaths", "publishedAtPath", "publishedAtUnit", "publishedAtUtcOffset", "externalIdPath",
-    "urlTemplate", "urlTemplateFallback", "rawDropKeys", "requireBoolean", "minNumeric",
+    "urlTemplate", "urlTemplateFallback", "captureGithubStars", "rawDropKeys", "requireBoolean", "minNumeric",
   ],
   // X accounts are mostly read in shards, which apply only these.
   x_search: [...PUBLISHER, "_aihot", "ingestNoiseFilter", "itemUrlPrefixRewrite", "query", "searchType"],
@@ -48,7 +49,7 @@ const preserveRules = (value: unknown) => Array.isArray(value) && value.every((r
 const VALUES: Record<string, string[]> = {
   publisherRole: ["organization", "person"],
   adapter: ["mimo_home"],
-  parseMode: ["html", "markdown", "docusaurus_changelog", "markdown_changelog", "intercom_changelog"],
+  parseMode: ["sitemap", "html", "markdown", "docusaurus_changelog", "markdown_changelog", "intercom_changelog"],
 };
 
 // An Accept-Language value: language ranges with optional weights, e.g. "en-US,en;q=0.9".
@@ -69,6 +70,9 @@ export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string
     if (!allowed.has(key)) out.push(key);
     else if (key === "publisherRequiresDiscovery" && (typeof value !== "boolean"
       || value && (!Array.isArray(config.publisherUrlPrefixes) || config.publisherUrlPrefixes.length === 0))) out.push(key);
+    else if (key === "captureGithubStars" && (typeof value !== "boolean" || value &&
+      (!supportsGithubStars(config.url) || ![undefined, "GET"].includes(config.method as string | undefined)
+        || ![undefined, "json_api"].includes(config.mode as string | undefined)))) out.push(key);
     else if (key === "publishedAfter" && !utcInstant(value)) out.push(key);
     else if (key === "acceptLanguage" && (typeof value !== "string" || !ACCEPT_LANGUAGE.test(value))) out.push(key);
     else if (key === "publisherUrlPrefixes" && (!Array.isArray(value) || !value.every((v) => {

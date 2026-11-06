@@ -14,6 +14,7 @@ import { extractFromUrl, pageRules } from "@aihot/backend/content/extract";
 import { sanitizeBody, trimTrailingChrome } from "@aihot/backend/content/sanitize";
 import { unsupportedConfig } from "@aihot/backend/sources/config-keys";
 import { fetchDetail, fetchWebList, fromHtml, fromMarkdown } from "@aihot/backend/sources/web-list";
+import { sitemapAdditions } from "@aihot/backend/sources/sitemap";
 import { fetchRss } from "@aihot/backend/sources/rss";
 import { fetchJsonList } from "@aihot/backend/sources/json-list";
 import { noiseFiltered } from "@aihot/backend/sources/filters";
@@ -296,4 +297,24 @@ test("a source's language is an Accept-Language value, refused by kinds that rea
     }
   }
   for (const kind of ["x_search", "mp_account", "external"] as const) assert.deepEqual(unsupportedConfig(kind, { acceptLanguage: "en" }), ["acceptLanguage"], kind);
+});
+
+test("a sitemap establishes a baseline; a newly listed URL enters collection with its own dates", async () => {
+  const loc = (slug: string) => `<url><loc>${site}/tools/${slug}</loc><lastmod>2026-09-30</lastmod></url>`;
+  let rows = loc("old-tool");
+  pages["/tools.xml"] = () => `<urlset xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">${rows}</urlset>`;
+  const cfg = { url: site + "/tools.xml", parseMode: "sitemap" };
+  assert.deepEqual(unsupportedConfig("web_list", cfg), []);
+  const first = sitemapAdditions(source(cfg), await fetchWebList(source(cfg)));
+  assert.deepEqual(first.entries, []);
+  rows += loc("new-tool") + loc("new-tool") + '<url><loc>https://other.example/tools/external</loc></url>' +
+    `<url><loc>${site}/tools/press</loc><news:news><news:publication_date>2026-09-28T01:00:00Z</news:publication_date><news:title>Introducing Weaver</news:title></news:news></url>`;
+  const current = { config: cfg, cursor: { sitemapBaseline: first.baseline } } as never;
+  const changes = sitemapAdditions(current, await fetchWebList(current));
+  assert.deepEqual(changes.entries.map(e => e.title), ["new tool", "Introducing Weaver"]);
+  assert.equal(changes.entries[0]?.publishedAt, null);
+  assert.ok(changes.entries[0]?.sourceUpdatedAt instanceof Date);
+  assert.equal(changes.entries[1]?.publicationTime, "2026-09-28T01:00:00.000Z");
+  pages["/index.xml"] = () => "<sitemapindex><sitemap><loc>https://other.example/list.xml</loc></sitemap></sitemapindex>";
+  await assert.rejects(fetchWebList(source({ ...cfg, url: site + "/index.xml" })), /leaf sitemap/);
 });

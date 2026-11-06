@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
+  "dependencies": {
+    "@aihot/term-radar": "*"
+  },
   "exports": {
     ".": "./site.ts",
     "./models": "./models.ts",

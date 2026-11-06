@@ -16,6 +16,48 @@
     "url": "{{siteUrl}}/openapi-v1.json"
   },
   "paths": {
+    "/api/v1/term-radar/github": {
+      "get": {
+        "operationId": "termRadarGitHub",
+        "summary": "Recently created public GitHub repositories with measured star growth",
+        "description": "Opt-in sources only. dayDelta is null without comparable adjacent observations.",
+        "responses": {
+          "200": { "description": "At most 20 qualifying repositories", "content": { "application/json": { "schema": {
+            "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": {
+              "type": "object", "required": ["repo", "url", "stars", "dayDelta", "starsPerDay", "observedAt", "createdAt"], "properties": {
+                "repo": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "stars": { "type": "integer" },
+                "dayDelta": { "type": ["integer", "null"] }, "starsPerDay": { "type": "integer" },
+                "observedAt": { "type": "string", "format": "date-time" }, "createdAt": { "type": "string", "format": "date-time" }
+              }
+            } } }
+          } } } },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      }
+    },
+    "/api/v1/term-radar": {
+      "get": {
+        "operationId": "termRadar",
+        "summary": "Latest observed new terms, cited source reports and 14-day follow-up",
+        "description": "Counts and trends describe only this site's evidence. A null daily count means there was no usable scan. An opportunity is a model suggestion for validation.",
+        "parameters": [{ "$ref": "#/components/parameters/IfNoneMatch" }],
+        "responses": {
+          "200": {
+            "description": "Latest snapshot filtered against current public evidence, or an empty list before the first scan.",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "required": ["version", "observedAt", "terms"],
+              "properties": {
+                "version": { "const": 1 },
+                "observedAt": { "type": ["string", "null"], "format": "date-time" },
+                "terms": { "type": "array", "items": { "$ref": "#/components/schemas/RadarTerm" } }
+              }
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" }
+        }
+      }
+    },
     "/api/v1/items": {
       "get": {
         "operationId": "items",
@@ -3354,6 +3396,26 @@
       }
     },
     "schemas": {
+      "RadarTerm": {
+        "type": "object",
+        "required": ["key", "term", "kind", "summary", "opportunity", "score", "firstSeen", "lastSeen", "sourceCount", "evidenceCount", "evidence", "trend", "review"],
+        "properties": {
+          "key": { "type": "string" }, "term": { "type": "string" }, "summary": { "type": "string" },
+          "kind": { "enum": ["model", "product", "tool", "repository", "concept", "other"] },
+          "opportunity": { "type": ["string", "null"] }, "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "firstSeen": { "type": "string", "format": "date" }, "lastSeen": { "type": "string", "format": "date" },
+          "sourceCount": { "type": "integer" }, "evidenceCount": { "type": "integer" },
+          "evidence": { "type": "array", "items": { "type": "object", "required": ["id", "title", "source", "url", "publishedAt"], "properties": {
+            "id": { "type": "string" }, "title": { "type": "string" }, "source": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "publishedAt": { "type": "string", "format": "date-time" }
+          } } },
+          "trend": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "type": "object", "required": ["day", "count"], "properties": {
+            "day": { "type": "string", "format": "date" }, "count": { "type": ["integer", "null"] }
+          } } },
+          "review": { "type": "object", "required": ["dueOn", "status"], "properties": {
+            "dueOn": { "type": "string", "format": "date" }, "status": { "enum": ["pending", "follow_up", "no_follow_up", "insufficient_data"] }
+          } }
+        }
+      },
       "Problem": {
         "type": "object",
         "required": [
